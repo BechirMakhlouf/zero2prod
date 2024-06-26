@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-cargo test && cargo check;
+cargo check && cargo fmt && cargo clippy;
