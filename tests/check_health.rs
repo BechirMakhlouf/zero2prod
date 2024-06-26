@@ -1,5 +1,8 @@
 use std::net::TcpListener;
 
+use sqlx::Connection;
+use sqlx::PgConnection;
+use zero2prod::configuration;
 use zero2prod::run;
 
 struct TestCase<T> {
@@ -7,7 +10,7 @@ struct TestCase<T> {
     err_msg: String,
 }
 
-fn spawn_app() -> Result<String, std::io::Error> {
+pub fn spawn_app() -> Result<String, std::io::Error> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr().unwrap().port().to_string();
     let server = run(listener)?;
@@ -41,6 +44,16 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let server_addr = spawn_app().expect("Failed to spawn app.");
     let client = reqwest::Client::new();
 
+    let connection_string = configuration::get_configuration()
+        .expect("failed to get configuration")
+        .database
+        .connection_string();
+
+    let _db_connection = PgConnection::connect(&connection_string)
+        .await
+        .expect("failed to connect to postgres database");
+
+    let _saved = sqlx::query!("SELECT email, name FROM subscriptions;",);
     let test_cases = [
         TestCase {
             case: vec![("email", "bechir@gmail.com"), ("name", "bayi")],
@@ -113,7 +126,7 @@ async fn subscribe_return_400_for_invalid_form_data() {
             .await
             .expect("failed to execute request");
 
-        // act
+        // assert
         assert_eq!(
             400,
             response.status().as_u16(),
