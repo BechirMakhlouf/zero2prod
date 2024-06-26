@@ -1,24 +1,10 @@
-use actix_web::{web, App, HttpResponse, HttpServer};
-
-async fn health_check() -> HttpResponse {
-    HttpResponse::Ok().finish()
-}
+use std::net::TcpListener;
+use zero2prod::run;
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().route("/health_check", web::get().to(health_check)))
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::health_check;
-
-    #[tokio::test]
-    async fn health_check_succeeds() {
-        let response = health_check().await;
-        assert!(response.status().is_success())
-    }
+async fn main() -> Result<(), std::io::Error> {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind to a random port");
+    println!("running on port: {}", listener.local_addr().unwrap().port());
+    let _ = run(listener)?.await;
+    Ok(())
 }
