@@ -11,7 +11,15 @@ actix-web = "4.8.0"
 regex = "1.10.5"
 serde = { version = "1.0.203", features = ["derive"] }
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }
-
+sqlx = { version = "0.7.4", features = [
+  "runtime-tokio-rustls",
+  "macros",
+  "postgres",
+  "uuid",
+  "chrono",
+  "migrate",
+] }
+config = "0.14.0"
 
 [[bin]]
 path = "src/main.rs"
