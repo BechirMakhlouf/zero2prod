@@ -10,10 +10,18 @@ struct TestCase<T> {
     err_msg: String,
 }
 
-pub fn spawn_app() -> Result<String, std::io::Error> {
+pub async fn spawn_app() -> Result<String, std::io::Error> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr().unwrap().port().to_string();
-    let server = run(listener)?;
+    let db_url = configuration::get_configuration()
+        .expect("failed to load server settings")
+        .database
+        .connection_string();
+    let db_pool = sqlx::PgPool::connect(&db_url)
+        .await
+        .expect("failed to open db pool");
+
+    let server = run(listener, db_pool)?;
     let _ = tokio::spawn(server);
     println!("port: {port}");
     Ok(format!("http://127.0.0.1:{}", port))
@@ -21,7 +29,8 @@ pub fn spawn_app() -> Result<String, std::io::Error> {
 
 #[tokio::test]
 async fn health_check_works() {
-    let server_addr = spawn_app().expect("Failed to spawn app.");
+    let server_addr = spawn_app().await.expect("Failed to spawn app.");
+
     let client = reqwest::Client::new();
 
     println!("server addr: {}", &server_addr);
@@ -41,7 +50,7 @@ async fn health_check_works() {
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // arrange
-    let server_addr = spawn_app().expect("Failed to spawn app.");
+    let server_addr = spawn_app().await.expect("Failed to spawn app.");
     let client = reqwest::Client::new();
 
     let connection_string = configuration::get_configuration()
@@ -54,6 +63,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .expect("failed to connect to postgres database");
 
     let _saved = sqlx::query!("SELECT email, name FROM subscriptions;",);
+
     let test_cases = [
         TestCase {
             case: vec![("email", "bechir@gmail.com"), ("name", "bayi")],
@@ -95,7 +105,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 #[tokio::test]
 async fn subscribe_return_400_for_invalid_form_data() {
     // arrange
-    let server_addr = spawn_app().expect("Failed to spawn app.");
+    let server_addr = spawn_app().await.expect("Failed to spawn app.");
     let client = reqwest::Client::new();
 
     let test_cases = [
