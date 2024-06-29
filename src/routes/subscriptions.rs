@@ -23,16 +23,25 @@ pub async fn subscriptions(
         form_data.name.trim(),
         form_data.email.trim()
     );
+
+    let request_span = tracing::info_span!(
+    "Adding a new subscriber.",
+    %request_id,
+    subscriber_email = %form_data.email,
+    subscriber_name = %form_data.name
+    );
+
+    let _request_span_guard = request_span.enter();
+
     let email_regex = regex::Regex::new(r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$").unwrap();
 
-    if !email_regex.is_match(form_data.email.trim()) {
+    if !email_regex.is_match(form_data.email.trim()) || form_data.name.trim().is_empty() {
         return HttpResponse::BadRequest().finish();
     };
-    if form_data.name.trim().is_empty() {
-        return HttpResponse::BadRequest().finish();
-    }
 
-    tracing::info!("requestid: {request_id} - saving new subscriber to the database.");
+    // tracing::info!("requestid: {request_id} - saving new subscriber to the database.");
+
+    let _query_span = tracing::info_span!("Saving new subscriber details in the database");
     match sqlx::query!(
         r#"
       INSERT INTO subscriptions (id, email, name, subscribed_at)

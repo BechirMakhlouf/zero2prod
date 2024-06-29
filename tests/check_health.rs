@@ -4,6 +4,7 @@ use sqlx::Pool;
 use sqlx::Postgres;
 use uuid::Uuid;
 use zero2prod::configuration::configure_database;
+use zero2prod::telemetry;
 use zero2prod::{configuration, run};
 
 struct TestConfig {
@@ -19,6 +20,8 @@ struct TestCase<T> {
 
 async fn spawn_app() -> Result<TestConfig, std::io::Error> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
+    let subscriber = telemetry::get_subscriber("into".into(), "debug".into());
+    telemetry::init_subscriber(subscriber);
 
     let port = listener.local_addr().unwrap().port().to_string();
 
