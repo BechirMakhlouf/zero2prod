@@ -3,8 +3,9 @@ mod routes;
 pub mod telemetry;
 use std::net::TcpListener;
 
-use actix_web::{dev::Server, middleware::Logger, web, App, HttpServer};
+use actix_web::{dev::Server, web, App, HttpServer};
 use sqlx::{Pool, Postgres};
+use tracing_actix_web::TracingLogger;
 
 pub fn run(listener: TcpListener, db_pool: Pool<Postgres>) -> Result<Server, std::io::Error> {
     let connection = web::Data::new(db_pool);
@@ -23,7 +24,7 @@ pub fn run(listener: TcpListener, db_pool: Pool<Postgres>) -> Result<Server, std
 
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
+            .wrap(TracingLogger::default())
             .app_data(connection.clone())
             .service(routes::health_check)
             .service(routes::subscriptions)
