@@ -15,6 +15,14 @@ pub async fn subscriptions(
     form_data: web::Form<SubscriptionFormData>,
     db_pool: web::Data<Pool<Postgres>>,
 ) -> HttpResponse {
+    let request_id = Uuid::new_v4();
+
+    tracing::info!(
+        "request_id: {} - Adding '{} {}' as a subscriber.",
+        request_id,
+        form_data.name.trim(),
+        form_data.email.trim()
+    );
     let email_regex = regex::Regex::new(r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$").unwrap();
 
     if !email_regex.is_match(form_data.email.trim()) {
@@ -24,7 +32,7 @@ pub async fn subscriptions(
         return HttpResponse::BadRequest().finish();
     }
 
-    log::info!("saving new subscriber info to the database.");
+    tracing::info!("requestid: {request_id} - saving new subscriber to the database.");
     match sqlx::query!(
         r#"
       INSERT INTO subscriptions (id, email, name, subscribed_at)
@@ -39,11 +47,11 @@ pub async fn subscriptions(
     .await
     {
         Ok(_) => {
-            log::info!("new subscriber details have been saved.");
+            tracing::info!("request_id: {request_id} - new subscriber details have been saved.");
             HttpResponse::Ok().finish()
         }
-        Err(_) => {
-            log::error!("failed to add a new subscriber to the database.");
+        Err(e) => {
+            tracing::error!("request_id {request_id} - Failed to execute query: {e:?}");
             HttpResponse::BadRequest().finish()
         }
     }
