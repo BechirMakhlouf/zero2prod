@@ -24,6 +24,7 @@ pub async fn subscriptions(
         return HttpResponse::BadRequest().finish();
     }
 
+    log::info!("saving new subscriber info to the database.");
     match sqlx::query!(
         r#"
       INSERT INTO subscriptions (id, email, name, subscribed_at)
@@ -37,7 +38,13 @@ pub async fn subscriptions(
     .execute(db_pool.get_ref())
     .await
     {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(_) => HttpResponse::BadRequest().finish(),
+        Ok(_) => {
+            log::info!("new subscriber details have been saved.");
+            HttpResponse::Ok().finish()
+        }
+        Err(_) => {
+            log::error!("failed to add a new subscriber to the database.");
+            HttpResponse::BadRequest().finish()
+        }
     }
 }
