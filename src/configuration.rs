@@ -1,6 +1,12 @@
 #![allow(dead_code)]
 
-use sqlx::{Connection, Executor, PgConnection, PgPool};
+use secrecy::{ExposeSecret, Secret};
+use serde_aux::field_attributes::deserialize_number_from_string;
+
+use sqlx::{
+    postgres::{PgConnectOptions, PgSslMode},
+    Connection, Executor, PgConnection, PgPool,
+};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Settings {
@@ -11,15 +17,18 @@ pub struct Settings {
 #[derive(Debug, serde::Deserialize)]
 pub struct DatabaseSettings {
     pub username: String,
-    pub password: String,
+    pub password: Secret<String>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub host: String,
     pub database_name: String,
+    pub require_ssl: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
 pub struct ApplicationSettings {
     pub host: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
 }
 pub enum Environment {
@@ -50,16 +59,52 @@ impl TryFrom<String> for Environment {
 }
 
 impl DatabaseSettings {
+    pub fn without_db(&self) -> PgConnectOptions {
+        let ssl_mode = if self.require_ssl {
+            PgSslMode::Require
+        } else {
+            PgSslMode::Prefer
+        };
+
+        PgConnectOptions::new()
+            .username(&self.username)
+            .password(self.password.expose_secret())
+            .host(&self.host)
+            .port(self.port)
+            .ssl_mode(ssl_mode)
+    }
+    pub fn with_db(&self) -> PgConnectOptions {
+        let ssl_mode = if self.require_ssl {
+            PgSslMode::Require
+        } else {
+            PgSslMode::Prefer
+        };
+        PgConnectOptions::new()
+            .username(&self.username)
+            .password(self.password.expose_secret())
+            .host(&self.host)
+            .port(self.port)
+            .database(&self.database_name)
+            .ssl_mode(ssl_mode)
+    }
+
     pub fn connection_string(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/{}",
-            self.username, self.password, self.host, self.port, self.database_name
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
+            self.database_name
         )
     }
     pub fn connection_string_without_db(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/",
-            self.username, self.password, self.host, self.port
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port
         )
     }
 }
@@ -79,6 +124,11 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
     let settings = config::Config::builder()
         .add_source(config::File::from(config_dir_path.join("base.yaml")))
         .add_source(config::File::from(config_dir_path.join(env_filname)))
+        .add_source(
+            config::Environment::with_prefix("APP")
+                .prefix_separator("_")
+                .separator("__"),
+        )
         .build()?;
 
     settings.try_deserialize::<Settings>()
@@ -86,7 +136,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     // Create database
-    let mut connection = PgConnection::connect(&config.connection_string_without_db())
+    let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to Postgres");
 
@@ -96,9 +146,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to create database.");
 
     // Migrate database
-    let connection_pool = PgPool::connect(&config.connection_string())
-        .await
-        .expect("Failed to connect to Postgres.");
+    let connection_pool = PgPool::connect_lazy_with(config.with_db());
 
     sqlx::migrate!("./migrations")
         .run(&connection_pool)

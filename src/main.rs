@@ -17,7 +17,7 @@ async fn main() -> Result<(), std::io::Error> {
     } = configuration::get_configuration().unwrap();
 
     let server_url = format!("{}:{}", application.host, application.port);
-    let listener = TcpListener::bind(server_url).unwrap();
+    let listener = TcpListener::bind(&server_url).unwrap();
 
     let connection_string = configuration::get_configuration()
         .expect("failed to get configuration")
@@ -27,7 +27,7 @@ async fn main() -> Result<(), std::io::Error> {
     let db_pool = sqlx::postgres::PgPool::connect_lazy(&connection_string)
         .expect("failed to connect to postgres database");
 
-    println!("running on port: {}", listener.local_addr().unwrap().port());
+    println!("running on url: {}", &server_url);
     let _ = run(listener, db_pool)?.await;
 
     Ok(())
